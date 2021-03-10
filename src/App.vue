@@ -10,7 +10,9 @@
             <div class="mt-1 relative rounded-md shadow-md">
               <input
                 v-model="ticker"
-                @keyup.enter="addTicker(ticker)"
+                @keyup.enter="addedBefore(ticker)"
+                @keyup="hintsSearch(ticker)"
+                @focus="chekAdd = false"
                 type="text"
                 name="wallet"
                 id="wallet"
@@ -20,31 +22,15 @@
             </div>
             <div class="flex bg-white p-1 rounded-md shadow-md flex-wrap">
               <span
-                @click="addTicker('BTC')"
+                @click="addedBefore(coin)"
+                v-for="coin in hintsReady"
+                :key="coin"
                 class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
               >
-                BTC
-              </span>
-              <span
-                @click="addTicker('DOGE')"
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                DOGE
-              </span>
-              <span
-                @click="addTicker('BCH')"
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                BCH
-              </span>
-              <span
-                @click="addTicker('CHD')"
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                CHD
+                {{ coin }}
               </span>
             </div>
-            <div v-if="false" class="text-sm text-red-600">
+            <div v-if="chekAdd" class="text-sm text-red-600">
               Такой тикер уже добавлен
             </div>
           </div>
@@ -52,7 +38,7 @@
         <button
           type="button"
           class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-          @click="addTicker(ticker)"
+          @click="addedBefore(ticker)"
         >
           <!-- Heroicon name: solid/mail -->
           <svg
@@ -93,7 +79,7 @@
             </div>
             <div class="w-full border-t border-gray-200"></div>
             <button
-              @click.stop="deleteTicker(ticker)"
+              @click.stop="deleteTicker(ticker.name)"
               class="flex items-center justify-center font-medium w-full bg-gray-100 px-4 py-4 sm:px-6 text-md text-gray-500 hover:text-gray-600 hover:bg-gray-200 hover:opacity-20 transition-all focus:outline-none"
             >
               <svg
@@ -168,7 +154,10 @@ export default {
         /*{ name: "DEMO", price: "-" }*/
       ],
       sel: null,
-      graph: []
+      graph: [],
+      chekAdd: false,
+      hintsData: [],
+      hintsReady: []
     };
   },
   methods: {
@@ -178,38 +167,30 @@ export default {
         this.ticker = "";
         return false;
       }
+
+      this.hintsReady = [];
+
       val = val.trim().split();
       val.forEach(function(item, i, arr) {
         arr[i] = item.toUpperCase();
       });
-      this.allTickers.push({ name: val.join(), price: "-" });
-      let timerID = setInterval(async () => {
-        const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${val.join()}&tsyms=USD`
-        );
-        let data = await f.json();
-        console.log(data.USD);
-        console.log(val.join());
-        let isLive = this.allTickers.find(t => t.name == val.join());
-        if (isLive == undefined) {
-          clearInterval(timerID);
-        } else {
-          // val.price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2); - не сработало
-          this.allTickers.find(t => t.name == val.join()).price =
-            data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
 
-          if (this.sel?.name == val.join()) {
-            // ? - прием из синтаксиса ES6, при котором, если значение будет равно null, то оно не  будет сравниватся
-            this.graph.push(data.USD);
-            console.log("Добавил");
-          }
-        }
-      }, 2000);
+      this.allTickers.push({ name: val.join(), price: "-" });
+
+      localStorage.setItem(
+        "cryptonomicon-tickers-list",
+        JSON.stringify(this.allTickers)
+      );
+
+      this.reqToPrice(val.join());
+
       this.ticker = "";
     },
     deleteTicker(val) {
-      this.allTickers = this.allTickers.filter(t => t != val);
+      this.allTickers = this.allTickers.filter(t => t.name != val);
       this.sel = val == this.sel ? null : this.sel;
+
+      localStorage.removeItem("cryptonomicon-tickers-list");
     },
     //думаю он сделает computed свойством
     buildGraph() {
@@ -219,18 +200,97 @@ export default {
         price => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
     },
+    reqToPrice(ticker) {
+      let timerID = setInterval(async () => {
+        const f = await fetch(
+          `https://min-api.cryptocompare.com/data/price?fsym=${ticker}&tsyms=USD`
+        );
+        let data = await f.json();
+        console.log(data.USD);
+        let isLive = this.allTickers.find(t => t.name == ticker);
+        if (isLive == undefined) {
+          clearInterval(timerID);
+        } else {
+          // val.price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2); - не сработало
+          try {
+            this.allTickers.find(t => t.name == ticker).price =
+              data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+          } catch {
+            alert("Извините, в данный момент этот тикер не действителен");
+            this.deleteTicker(ticker);
+          }
+          if (this.sel?.name == ticker) {
+            // ? - прием из синтаксиса ES6, при котором, если значение будет равно null, то оно не  будет сравниватся
+            this.graph.push(data.USD);
+            console.log("Добавил");
+          }
+        }
+      }, 2000);
+    },
     selectTicker(t) {
       this.sel = t;
       this.graph = [];
+    },
+    addedBefore(ticker) {
+      ticker = ticker
+        .split("")
+        .map(x => x.toUpperCase())
+        .join("");
+      console.log(ticker);
+
+      if (this.allTickers.find(t => t.name == ticker) == undefined) {
+        return this.addTicker(ticker);
+      } else {
+        return (this.chekAdd = true);
+      }
+    },
+    hintsSearch(ticker) {
+      ticker = ticker
+        .split("")
+        .map(x => x.toUpperCase())
+        .join("");
+      let allCoins = Object.keys(this.hintsData);
+      console.log(allCoins);
+      let allHints = [];
+      let reg = RegExp(`^` + ticker);
+      allCoins.forEach(function(coin) {
+        if (reg.test(coin) || coin == ticker) {
+          allHints.push(coin);
+        }
+      });
+      console.log(allHints.slice(0, 4));
+      return (this.hintsReady = allHints.slice(0, 4));
     }
   },
+  computed: {},
   watch: {
     ticker: function() {
       console.log(this.ticker);
       /* eslint-disable */
     }
+  },
+  created() {
+    setTimeout(async () => {
+      const f = await fetch(
+        "https://min-api.cryptocompare.com/data/all/coinlist"
+      );
+      let data = await f.json();
+      console.log(data.Data);
+      this.hintsData = data.Data;
+    }, 100);
+
+    const tickersData = localStorage.getItem("cryptonomicon-tickers-list");
+    // console.log(tickersData);
+    // console.log(JSON.parse(tickersData));
+    if (tickersData !== null) {
+      this.allTickers = JSON.parse(tickersData);
+
+      JSON.parse(tickersData).forEach(item => {
+        this.reqToPrice(item.name);
+      });
+    }
+
+    // console.log(this.allTickers);
   }
 };
 </script>
-
-<style src="../public/css/app.css"></style>
