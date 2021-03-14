@@ -62,12 +62,12 @@
         <div v-show="btnOn">
           <button
             @click="page = page - 1"
-            v-if="page !== 1"
+            v-if="page > 1"
             class="my-4 mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
           >
             Назад
           </button>
-          {{ page }}
+          Текущая страница: {{ page }}
           <button
             @click="page = page + 1"
             v-if="6 * (page + 1) - allTickers.length < 6"
@@ -81,14 +81,18 @@
         </div>
 
         <hr class="w-full border-t border-gray-600 my-4" />
-        <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <dl
+          v-if="filteredTickers.length"
+          class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3"
+        >
+          <!-- <div v-if="filteredTickers.length"> -->
           <div
-            v-for="ticker in filteredTickers()"
+            v-for="ticker in filteredTickers"
             :key="ticker.name"
             @click="selectTicker(ticker)"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
             :class="{
-              'border-4': ticker == sel
+              'border-4': ticker == selectedTicker
             }"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
@@ -119,15 +123,19 @@
               >Удалить
             </button>
           </div>
+          <!-- </div> -->
         </dl>
+        <div v-if="!filteredTickers.length">
+          <h3 class="text-center text-gray-400">Пусто</h3>
+        </div>
         <hr class="w-full border-t border-gray-600 my-4" />
-        <section v-if="sel" class="relative">
+        <section v-if="selectedTicker" class="relative">
           <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-            {{ sel.name }} - USD
+            {{ selectedTicker.name }} - USD
           </h3>
           <div class="flex items-end border-gray-600 border-b border-l h-64">
             <div
-              v-for="(bar, i) in buildGraph()"
+              v-for="(bar, i) in buildGraph"
               :style="{ height: `${bar}%` }"
               :key="i"
               class="bg-purple-800 border w-10"
@@ -135,7 +143,7 @@
           </div>
           <button
             type="button"
-            @click="sel = null"
+            @click="selectedTicker = null"
             class="absolute top-0 right-0"
           >
             <svg
@@ -167,6 +175,8 @@
 </template>
 
 <script>
+import { loadTickers } from "./api.js";
+
 export default {
   name: "App",
   data() {
@@ -175,19 +185,19 @@ export default {
       allTickers: [
         /*{ name: "DEMO", price: "-" }*/
       ],
-      sel: null,
+      selectedTicker: null,
       graph: [],
       chekAdd: false,
       hintsData: [],
       hintsReady: [],
       page: 1,
-      filter: "",
-      btnOn: true
+      filter: ""
     };
   },
   methods: {
-    addTicker(val) {
-      if (val.trim() == "") {
+    addTicker(ticker) {
+      ticker = this.tickerUpCase(ticker);
+      if (ticker.trim() == "") {
         alert("Вы не ввели название тикера!");
         this.ticker = "";
         return false;
@@ -198,73 +208,79 @@ export default {
 
       this.filter = "";
 
-      val = val.trim().split();
-      val.forEach(function(item, i, arr) {
-        arr[i] = item.toUpperCase();
-      });
+      this.allTickers = [...this.allTickers, { name: ticker, price: "-" }];
 
-      this.allTickers.push({ name: val.join(), price: "-" });
-
-      localStorage.setItem(
-        "cryptonomicon-tickers-list",
-        JSON.stringify(this.allTickers)
-      );
-
-      this.reqToPrice(val.join());
+      this.reqToPrice();
 
       this.ticker = "";
     },
-    deleteTicker(val) {
-      this.allTickers = this.allTickers.filter(t => t.name != val);
-      this.sel = val == this.sel ? null : this.sel;
+    deleteTicker(ticker) {
+      this.allTickers = this.allTickers.filter(t => t.name != ticker);
+      if (this.selectedTicker) {
+        this.selectedTicker =
+          ticker == this.selectedTicker.name ? null : this.selectedTicker;
+      }
+      // console.log(ticker);
+      // console.log(this.selectedTicker);
+      // console.log(ticker == this.selectedTickerectedTicker);
 
       localStorage.removeItem("cryptonomicon-tickers-list");
     },
-    //думаю он сделает computed свойством
-    buildGraph() {
-      const maxValue = Math.max(...this.graph);
-      const minValue = Math.min(...this.graph);
-      return this.graph.map(
-        price => 5 + ((price - minValue) * 95) / (maxValue - minValue)
-      );
+    tickerUpCase(val) {
+      return val.toUpperCase();
     },
-    reqToPrice(ticker) {
-      let timerID = setInterval(async () => {
-        const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${ticker}&tsyms=USD`
-        );
-        let data = await f.json();
-        console.log(data.USD);
-        let isLive = this.allTickers.find(t => t.name == ticker);
-        if (isLive == undefined) {
-          clearInterval(timerID);
-        } else {
-          // val.price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2); - не сработало
-          try {
-            this.allTickers.find(t => t.name == ticker).price =
-              data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-          } catch {
-            alert("Извините, в данный момент этот тикер не действителен");
-            this.deleteTicker(ticker);
-          }
-          if (this.sel?.name == ticker) {
-            // ? - прием из синтаксиса ES6, при котором, если значение будет равно null, то оно не  будет сравниватся
-            this.graph.push(data.USD);
-            console.log("Добавил");
-          }
+    // formattedPrice(price) {
+    //   if (price === "-") {
+    //     return price;
+    //   }
+    //   return price > 1 ? price.toFixed(2) : price.toPrecision(2);
+    // },
+    async reqToPrice() {
+      if (!this.allTickers.length) return;
+      // let timerID = setInterval(async () => {
+      let data = await loadTickers(this.allTickers.map(t => t.name));
+      console.log(data);
+      this.allTickers.forEach(t => {
+        const price = data[this.tickerUpCase(t.name)];
+
+        t.price = price ?? "-";
+        if (t.price == "-") {
+          alert("На данный момент, этот тикер недоступный");
+          this.deleteTicker(t.name);
         }
-      }, 2000);
+      });
+      // console.log(data);
+      // let isLive = this.allTickers.find(t => t.name == ticker);
+      // if (isLive == undefined) {
+      // clearInterval(timerID);
+      // } else {
+      // val.price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2); - не сработало
+      // try {
+      //   this.allTickers.find(t => t.name == ticker).price =
+      //     data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+      // } catch {
+      //   alert("Извините, в данный момент этот тикер не действителен");
+      //   this.deleteTicker(ticker);
+      // }
+      // if (this.selectedTicker?.name == ticker) {
+      //   // ? - прием из синтаксиса ES6, при котором, если значение будет равно null, то оно не  будет сравниватся
+      //   this.graph.push(data.USD);
+      //   console.log("Добавил");
+      // }
+      //   }
+      // }, 2000);
     },
     selectTicker(t) {
-      this.sel = t;
-      this.graph = [];
+      this.selectedTicker = t;
+      let graphInterval = setInterval(() => {
+        this.graph.push(t.price);
+        console.log("Добавил");
+        if (!this.selectedTicker || this.selectedTicker.name != t.name)
+          clearInterval(graphInterval);
+      }, 5000);
     },
     addedBefore(ticker) {
-      ticker = ticker
-        .trim()
-        .split("")
-        .map(x => x.toUpperCase())
-        .join("");
+      ticker = this.tickerUpCase(ticker);
       console.log(ticker);
 
       if (this.allTickers.find(t => t.name == ticker) == undefined) {
@@ -274,11 +290,7 @@ export default {
       }
     },
     hintsSearch(ticker) {
-      ticker = ticker
-        .trim()
-        .split("")
-        .map(x => x.toUpperCase())
-        .join("");
+      ticker = this.tickerUpCase(ticker);
       if (ticker == "") return false;
 
       let allCoins = Object.keys(this.hintsData);
@@ -292,44 +304,76 @@ export default {
       });
       console.log(allHints.slice(0, 4));
       return (this.hintsReady = allHints.slice(0, 4));
-    },
-    // filteredTickers() {
-    //   return this.allTickers.filter(ticker => ticker.includes(this.filter));
-    // },
-
-    filteredTickers() {
+    }
+  },
+  computed: {
+    filteredTickers: function() {
       if (this.filter.trim() == "") {
-        this.btnOn = true;
         let start = (this.page - 1) * 6;
         let end = this.page * 6;
         return this.allTickers.slice(start, end);
       } else {
-        this.btnOn = false;
         return this.allTickers.filter(ticker =>
           ticker.name.toLowerCase().includes(this.filter.toLowerCase())
         );
       }
+    },
+    pageStatusOption: function() {
+      return {
+        filter: this.filter,
+        page: this.page
+      };
+    },
+    btnOn: function() {
+      return this.filter.trim() == "" ? true : false;
+    },
+    buildGraph: function() {
+      const maxValue = Math.max(...this.graph);
+      const minValue = Math.min(...this.graph);
+      if (maxValue == minValue) {
+        return this.graph.map(() => 50);
+      }
+      return this.graph.map(
+        price => 5 + ((price - minValue) * 95) / (maxValue - minValue)
+      );
     }
   },
   watch: {
     ticker: function() {
       if (this.ticker.trim() == "") this.hintsReady = [];
+      let reg = new RegExp(`[^a-zA-Z0-9]`);
+      if (this.ticker.search(reg) != -1 && this.ticker.length > 1) {
+        this.ticker = this.ticker.substr(0, this.ticker.length - 1);
+      }
     },
-    filter: function() {
-      //пушим в историю браузера текущий фильтр и страницу
+    // filter: function() {
+    //   //пушим в историю браузера текущий фильтр и страницу
+    //   window.history.pushState(
+    //     null,
+    //     document.title,
+    //     `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+    //   );
+    // },
+    filteredTickers: function() {
+      if (this.filteredTickers.length == 0 && this.page != 1) {
+        this.page -= 1;
+      }
+    },
+    allTickers: function() {
+      localStorage.setItem(
+        "cryptonomicon-tickers-list",
+        JSON.stringify(this.allTickers)
+      );
+    },
+    pageStatusOption: function(val) {
       window.history.pushState(
         null,
         document.title,
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+        `${window.location.pathname}?filter=${val.filter}&page=${val.page}`
       );
     },
-    page: function() {
-      console.log(this.page);
-      window.history.pushState(
-        null,
-        document.title,
-        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
-      );
+    selectedTicker: function() {
+      this.graph = [];
     }
   },
   created() {
@@ -350,7 +394,7 @@ export default {
       this.filter = windowData.filter;
     }
     if (windowData.page) {
-      this.page = windowData.page;
+      this.page = parseFloat(windowData.page);
     }
 
     const tickersData = localStorage.getItem("cryptonomicon-tickers-list");
@@ -358,11 +402,10 @@ export default {
     // console.log(JSON.parse(tickersData));
     if (tickersData !== null) {
       this.allTickers = JSON.parse(tickersData);
-
-      JSON.parse(tickersData).forEach(item => {
-        this.reqToPrice(item.name);
-      });
     }
+
+    //   JSON.parse(tickersData).forEach(item => {
+    setInterval(this.reqToPrice, 5000);
 
     // console.log(this.allTickers);
   }
