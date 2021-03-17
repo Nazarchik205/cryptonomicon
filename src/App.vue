@@ -100,7 +100,7 @@
                 {{ ticker.name }} - USD
               </dt>
               <dd class="mt-1 text-3xl font-semibold text-gray-900">
-                {{ ticker.price }}
+                {{ formattedPrice(ticker.price) }}
               </dd>
             </div>
             <div class="w-full border-t border-gray-200"></div>
@@ -175,7 +175,7 @@
 </template>
 
 <script>
-import { loadTickers } from "./api.js";
+import { subscribeOnTicker, unsubscribeOnTicker } from "./api.js";
 
 export default {
   name: "App",
@@ -210,7 +210,7 @@ export default {
 
       this.allTickers = [...this.allTickers, { name: ticker, price: "-" }];
 
-      this.reqToPrice();
+      subscribeOnTicker(ticker, newPrice => this.updatePrice(ticker, newPrice));
 
       this.ticker = "";
     },
@@ -220,6 +220,7 @@ export default {
         this.selectedTicker =
           ticker == this.selectedTicker.name ? null : this.selectedTicker;
       }
+      unsubscribeOnTicker(ticker);
       // console.log(ticker);
       // console.log(this.selectedTicker);
       // console.log(ticker == this.selectedTickerectedTicker);
@@ -229,26 +230,36 @@ export default {
     tickerUpCase(val) {
       return val.toUpperCase();
     },
-    // formattedPrice(price) {
-    //   if (price === "-") {
-    //     return price;
-    //   }
-    //   return price > 1 ? price.toFixed(2) : price.toPrecision(2);
-    // },
-    async reqToPrice() {
-      if (!this.allTickers.length) return;
-      // let timerID = setInterval(async () => {
-      let data = await loadTickers(this.allTickers.map(t => t.name));
-      console.log(data);
-      this.allTickers.forEach(t => {
-        const price = data[this.tickerUpCase(t.name)];
+    formattedPrice(price) {
+      if (price === "-") {
+        return price;
+      }
+      return price > 1 ? price.toFixed(2) : price.toPrecision(2);
+    },
+    updatePrice(tickerName, price) {
+      this.allTickers
+        .filter(t => t.name === tickerName)
+        .forEach(t => {
+          t.price = price;
+          console.log(t);
+        });
 
-        t.price = price ?? "-";
-        if (t.price == "-") {
-          alert("На данный момент, этот тикер недоступный");
-          this.deleteTicker(t.name);
-        }
-      });
+      //  async reqToPrice(){
+      // if (!this.allTickers.length) return;
+      // let timerID = setInterval(async () => {
+
+      // let data = await loadTickers(this.allTickers.map(t => t.name));
+      // console.log(data);
+      // this.allTickers.forEach(t => {
+      //   const price = data[this.tickerUpCase(t.name)];
+
+      //   t.price = price ?? "-";
+      //   if (t.price == "-") {
+      //     alert("На данный момент, этот тикер недоступный");
+      //     this.deleteTicker(t.name);
+      //   }
+      // });
+
       // console.log(data);
       // let isLive = this.allTickers.find(t => t.name == ticker);
       // if (isLive == undefined) {
@@ -402,10 +413,16 @@ export default {
     // console.log(JSON.parse(tickersData));
     if (tickersData !== null) {
       this.allTickers = JSON.parse(tickersData);
+      this.allTickers.forEach(t => {
+        subscribeOnTicker(t.name, newPrice => {
+          this.updatePrice(t.name, newPrice);
+          console.log(`Name: ${t.name}; Price: ${newPrice}`);
+        });
+      });
     }
 
     //   JSON.parse(tickersData).forEach(item => {
-    setInterval(this.reqToPrice, 5000);
+    // setInterval(this.updatePrice, 5000);
 
     // console.log(this.allTickers);
   }
