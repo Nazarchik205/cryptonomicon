@@ -78,6 +78,7 @@
         </div>
         <div>
           <p>Фильтр: <input v-model="filter" /></p>
+          <p></p>
         </div>
 
         <hr class="w-full border-t border-gray-600 my-4" />
@@ -92,7 +93,8 @@
             @click="selectTicker(ticker)"
             class="bg-white overflow-hidden shadow rounded-lg border-purple-800 border-solid cursor-pointer"
             :class="{
-              'border-4': ticker == selectedTicker
+              'border-4': ticker == selectedTicker,
+              'bg-red-100': ticker.isInvalid
             }"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
@@ -133,12 +135,16 @@
           <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
             {{ selectedTicker.name }} - USD
           </h3>
-          <div class="flex items-end border-gray-600 border-b border-l h-64">
+          <div
+            class="flex items-end border-gray-600 border-b border-l h-64"
+            ref="graph"
+          >
             <div
               v-for="(bar, i) in buildGraph"
-              :style="{ height: `${bar}%` }"
+              :style="{ height: `${bar}%`, width: `${maxGraphColumnWidth}px` }"
               :key="i"
-              class="bg-purple-800 border w-10"
+              ref="graphElement"
+              class="bg-purple-800 border"
             ></div>
           </div>
           <button
@@ -175,7 +181,42 @@
 </template>
 
 <script>
-import { subscribeOnTicker, unsubscribeOnTicker } from "./api.js";
+import { subscribeOnTicker, unsubscribeOnTicker, coinList } from "./api.js";
+
+//todo Доделать шейред-воркер
+let worker = new SharedWorker(
+  "/Users/nnnaz/Projects/Уроки_Илья_Климов/cryptonomicon/src/worker.js",
+  { name: "shared-worker-for-sockets" }
+);
+// worker.port.addEventListener("message", e => {
+//   console.log(e.data);
+//   alert("Why?");
+// });
+
+worker.port.onmessage = event => {
+  console.log("eventtt", event);
+};
+worker.port.onerror = error => {
+  console.log(error);
+};
+
+window.worker = worker;
+// worker.port.start();
+worker.port.postMessage(5);
+//todo Доделать шейред-воркер
+
+// //? Технология Dedicated Worker
+// let worker = new Worker("./worker.js");
+
+// worker.onmessage = event => {
+//   console.log("eventtt", event);
+// };
+// worker.onerror = error => {
+//   console.log(error);
+// };
+
+// worker.postMessage(5);
+//? Технология Dedicated Worker
 
 export default {
   name: "App",
@@ -187,11 +228,14 @@ export default {
       ],
       selectedTicker: null,
       graph: [],
+      maxGraphColumn: 1,
+      maxGraphColumnWidth: 39,
       chekAdd: false,
       hintsData: [],
       hintsReady: [],
       page: 1,
       filter: ""
+      // tickersWithoutPrice: invalidTickers
     };
   },
   methods: {
@@ -208,10 +252,12 @@ export default {
 
       this.filter = "";
 
-      this.allTickers = [...this.allTickers, { name: ticker, price: "-" }];
+      this.allTickers = [
+        ...this.allTickers,
+        { name: ticker, price: "-", isInvalid: false }
+      ];
 
       subscribeOnTicker(ticker, newPrice => this.updatePrice(ticker, newPrice));
-
       this.ticker = "";
     },
     deleteTicker(ticker) {
@@ -221,11 +267,17 @@ export default {
           ticker == this.selectedTicker.name ? null : this.selectedTicker;
       }
       unsubscribeOnTicker(ticker);
-      // console.log(ticker);
-      // console.log(this.selectedTicker);
-      // console.log(ticker == this.selectedTickerectedTicker);
 
       localStorage.removeItem("cryptonomicon-tickers-list");
+    },
+    calculateGraphColumn() {
+      if (!this.$refs.graph) {
+        console.log("WHYYYYY");
+        return;
+      }
+      this.maxGraphColumn = Math.floor(
+        this.$refs.graph.clientWidth / this.maxGraphColumnWidth
+      );
     },
     tickerUpCase(val) {
       return val.toUpperCase();
@@ -241,58 +293,28 @@ export default {
         .filter(t => t.name === tickerName)
         .forEach(t => {
           t.price = price;
-          console.log(t);
         });
-
-      //  async reqToPrice(){
-      // if (!this.allTickers.length) return;
-      // let timerID = setInterval(async () => {
-
-      // let data = await loadTickers(this.allTickers.map(t => t.name));
-      // console.log(data);
-      // this.allTickers.forEach(t => {
-      //   const price = data[this.tickerUpCase(t.name)];
-
-      //   t.price = price ?? "-";
-      //   if (t.price == "-") {
-      //     alert("На данный момент, этот тикер недоступный");
-      //     this.deleteTicker(t.name);
-      //   }
-      // });
-
-      // console.log(data);
-      // let isLive = this.allTickers.find(t => t.name == ticker);
-      // if (isLive == undefined) {
-      // clearInterval(timerID);
-      // } else {
-      // val.price = data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2); - не сработало
-      // try {
-      //   this.allTickers.find(t => t.name == ticker).price =
-      //     data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-      // } catch {
-      //   alert("Извините, в данный момент этот тикер не действителен");
-      //   this.deleteTicker(ticker);
-      // }
-      // if (this.selectedTicker?.name == ticker) {
-      //   // ? - прием из синтаксиса ES6, при котором, если значение будет равно null, то оно не  будет сравниватся
-      //   this.graph.push(data.USD);
-      //   console.log("Добавил");
-      // }
-      //   }
-      // }, 2000);
+      if (this.selectedTicker && this.selectedTicker.name == tickerName) {
+        if (price != "-" && price != undefined) {
+          this.graph.push(price);
+          if (this.graph.length > this.maxGraphColumn) {
+            console.log(this.maxGraphColumn);
+            this.graph = this.graph.slice(
+              Math.abs(this.maxGraphColumn - this.graph.length),
+              this.graph.length
+            );
+          }
+          console.log("Добавил" + " " + tickerName, this.graph.length);
+          console.log(this.$refs.graph);
+        }
+      }
     },
     selectTicker(t) {
       this.selectedTicker = t;
-      let graphInterval = setInterval(() => {
-        this.graph.push(t.price);
-        console.log("Добавил");
-        if (!this.selectedTicker || this.selectedTicker.name != t.name)
-          clearInterval(graphInterval);
-      }, 5000);
+      this.$nextTick().then(this.calculateGraphColumn);
     },
     addedBefore(ticker) {
       ticker = this.tickerUpCase(ticker);
-      console.log(ticker);
 
       if (this.allTickers.find(t => t.name == ticker) == undefined) {
         return this.addTicker(ticker);
@@ -305,7 +327,6 @@ export default {
       if (ticker == "") return false;
 
       let allCoins = Object.keys(this.hintsData);
-      console.log(allCoins);
       let allHints = [];
       let reg = RegExp(`^` + ticker);
       allCoins.forEach(function(coin) {
@@ -353,12 +374,16 @@ export default {
     ticker: function() {
       if (this.ticker.trim() == "") this.hintsReady = [];
       let reg = new RegExp(`[^a-zA-Z0-9]`);
-      if (this.ticker.search(reg) != -1 && this.ticker.length > 1) {
+      if (this.ticker.search(reg) != -1 && this.ticker.length >= 1) {
         this.ticker = this.ticker.substr(0, this.ticker.length - 1);
       }
     },
+    invalidTickers: function() {
+      this.ticker = "";
+      // this.tickersWithoutPrice = invalidTickers;
+    },
     // filter: function() {
-    //   //пушим в историю браузера текущий фильтр и страницу
+    //пушим в историю браузера текущий фильтр и страницу
     //   window.history.pushState(
     //     null,
     //     document.title,
@@ -375,6 +400,11 @@ export default {
         "cryptonomicon-tickers-list",
         JSON.stringify(this.allTickers)
       );
+      setInterval(() => {
+        this.allTickers.forEach(t => {
+          t.isInvalid = t.price == "-" ? true : false;
+        });
+      }, 1000);
     },
     pageStatusOption: function(val) {
       window.history.pushState(
@@ -383,20 +413,21 @@ export default {
         `${window.location.pathname}?filter=${val.filter}&page=${val.page}`
       );
     },
+    "navigator.onLine": function() {
+      if (navigator.onLine !== true) {
+        this.allTickers.map(x => this.tickersWithoutPrice.push(x));
+        alert(
+          "Для функционала сайта - восстановите своё подключение к интернету!"
+        );
+      } else {
+        this.tickersWithoutPrice = [];
+      }
+    },
     selectedTicker: function() {
       this.graph = [];
     }
   },
   created() {
-    setTimeout(async () => {
-      const f = await fetch(
-        "https://min-api.cryptocompare.com/data/all/coinlist"
-      );
-      let data = await f.json();
-      console.log(data.Data);
-      this.hintsData = data.Data;
-    }, 100);
-
     let windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
     );
@@ -408,9 +439,10 @@ export default {
       this.page = parseFloat(windowData.page);
     }
 
-    const tickersData = localStorage.getItem("cryptonomicon-tickers-list");
-    // console.log(tickersData);
-    // console.log(JSON.parse(tickersData));
+    coinList().then(res => (this.hintsData = res)); //запрашиваем данные для базы с подсказками
+
+    const tickersData = localStorage.getItem("cryptonomicon-tickers-list"); //берем кешируемые данные про тикеры
+
     if (tickersData !== null) {
       this.allTickers = JSON.parse(tickersData);
       this.allTickers.forEach(t => {
@@ -420,11 +452,13 @@ export default {
         });
       });
     }
-
-    //   JSON.parse(tickersData).forEach(item => {
-    // setInterval(this.updatePrice, 5000);
-
-    // console.log(this.allTickers);
+  },
+  mounted() {
+    window.addEventListener("resize", this.calculateGraphColumn);
+  },
+  beforeUnmount() {
+    window.removeEventListener("resize", this.calculateGraphColumn);
+    // worker.terminate();
   }
 };
 </script>
