@@ -59,7 +59,7 @@
 
       <section v-if="allTickers.length">
         <hr class="w-full border-t border-gray-600 my-4" />
-        <div v-show="btnOn">
+        <div>
           <button
             @click="page = page - 1"
             v-if="page > 1"
@@ -77,8 +77,40 @@
           </button>
         </div>
         <div>
-          <p>Фильтр: <input v-model="filter" /></p>
-          <p></p>
+          <p>
+            Фильтр:
+            <input
+              v-model="filter"
+              class="mt-2"
+              @keydown="
+                {
+                  page = 1;
+                  filterPrice = 'filterPriceNone';
+                }
+              "
+            />
+          </p>
+          <p v-if="filter.trim() == ''">
+            Фильтровать за:
+            <select
+              v-model="filterPrice"
+              class="border-black max-h-10.5 mt-2 cursor-pointer"
+            >
+              <option disabled class="bg-gray-300"> Выберите пункт </option>
+              <option
+                value="filterPriceDown"
+                class="bg-gray-200 hover:bg-gray-500"
+              >
+                Ценой по убыванию</option
+              >
+              <option value="filterPriceUp" class="bg-gray-200">
+                Ценой по возростанию</option
+              >
+              <option selected value="filterPriceNone" class="bg-gray-200">
+                Порядком добавления</option
+              >
+            </select>
+          </p>
         </div>
 
         <hr class="w-full border-t border-gray-600 my-4" />
@@ -234,7 +266,9 @@ export default {
       hintsData: [],
       hintsReady: [],
       page: 1,
-      filter: ""
+      filter: "",
+      filterUniq: false,
+      filterPrice: "filterPriceNone"
       // tickersWithoutPrice: invalidTickers
     };
   },
@@ -336,18 +370,64 @@ export default {
       });
       console.log(allHints.slice(0, 4));
       return (this.hintsReady = allHints.slice(0, 4));
+    },
+    filteredTickersForPrice() {
+      let start = (this.page - 1) * 6;
+      let end = this.page * 6;
+      let sortArr = [...this.allTickers];
+      if (this.filterPrice == "filterPriceDown") {
+        sortArr
+          .sort(function(t1, t2) {
+            if (t2.price < t1.price) {
+              return -1;
+            }
+            if (t2.price > t1.price) {
+              return 1;
+            } else {
+              return 0;
+            }
+          })
+          .slice(start, end);
+        console.log(sortArr);
+        return sortArr;
+      }
+      if (this.filterPrice == "filterPriceUp") {
+        sortArr
+          .sort(function(t1, t2) {
+            if (t1.price > t2.price) {
+              return 1;
+            }
+            if (t1.price < t2.price) {
+              return -1;
+            } else {
+              return 0;
+            }
+          })
+          .slice(start, end);
+        console.log(sortArr);
+        console.log(this.allTickers);
+        return sortArr;
+      } else {
+        return this.allTickers.slice(start, end);
+      }
     }
   },
   computed: {
     filteredTickers: function() {
-      if (this.filter.trim() == "") {
-        let start = (this.page - 1) * 6;
-        let end = this.page * 6;
-        return this.allTickers.slice(start, end);
+      let start = (this.page - 1) * 6;
+      let end = this.page * 6;
+      if (this.filterPrice == "" || this.filterPrice == "filterPriceNone") {
+        if (this.filter.trim() == "") {
+          return this.allTickers.slice(start, end);
+        } else {
+          return this.allTickers
+            .filter(ticker =>
+              ticker.name.toLowerCase().includes(this.filter.toLowerCase())
+            )
+            .slice(start, end);
+        }
       } else {
-        return this.allTickers.filter(ticker =>
-          ticker.name.toLowerCase().includes(this.filter.toLowerCase())
-        );
+        return this.filteredTickersForPrice().slice(start, end);
       }
     },
     pageStatusOption: function() {
@@ -356,9 +436,9 @@ export default {
         page: this.page
       };
     },
-    btnOn: function() {
-      return this.filter.trim() == "" ? true : false;
-    },
+    // btnOn: function() {
+    //   return this.filter.trim() == "" ? true : false;
+    // },
     buildGraph: function() {
       const maxValue = Math.max(...this.graph);
       const minValue = Math.min(...this.graph);
@@ -378,8 +458,8 @@ export default {
         this.ticker = this.ticker.substr(0, this.ticker.length - 1);
       }
     },
-    invalidTickers: function() {
-      this.ticker = "";
+    filterPrice: function() {
+      console.log(this.filterPrice);
       // this.tickersWithoutPrice = invalidTickers;
     },
     // filter: function() {
