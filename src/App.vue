@@ -40,7 +40,6 @@
           class="my-4 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
           @click="addedBefore(ticker)"
         >
-          <!-- Heroicon name: solid/mail -->
           <svg
             class="-ml-0.5 mr-2 h-6 w-6"
             xmlns="http://www.w3.org/2000/svg"
@@ -118,7 +117,6 @@
           v-if="filteredTickers.length"
           class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3"
         >
-          <!-- <div v-if="filteredTickers.length"> -->
           <div
             v-for="ticker in filteredTickers"
             :key="ticker.name"
@@ -157,7 +155,6 @@
               >Удалить
             </button>
           </div>
-          <!-- </div> -->
         </dl>
         <div v-if="!filteredTickers.length">
           <h3 class="text-center text-gray-400">Пусто</h3>
@@ -215,41 +212,6 @@
 <script>
 import { subscribeOnTicker, unsubscribeOnTicker, coinList } from "./api.js";
 
-//todo Доделать шейред-воркер
-let worker = new SharedWorker(
-  "/Users/nnnaz/Projects/Уроки_Илья_Климов/cryptonomicon/src/worker.js",
-  { name: "shared-worker-for-sockets" }
-);
-// worker.port.addEventListener("message", e => {
-//   console.log(e.data);
-//   alert("Why?");
-// });
-
-worker.port.onmessage = event => {
-  console.log("eventtt", event);
-};
-worker.port.onerror = error => {
-  console.log(error);
-};
-
-window.worker = worker;
-// worker.port.start();
-worker.port.postMessage(5);
-//todo Доделать шейред-воркер
-
-// //? Технология Dedicated Worker
-// let worker = new Worker("./worker.js");
-
-// worker.onmessage = event => {
-//   console.log("eventtt", event);
-// };
-// worker.onerror = error => {
-//   console.log(error);
-// };
-
-// worker.postMessage(5);
-//? Технология Dedicated Worker
-
 export default {
   name: "App",
   data() {
@@ -269,7 +231,6 @@ export default {
       filter: "",
       filterUniq: false,
       filterPrice: "filterPriceNone"
-      // tickersWithoutPrice: invalidTickers
     };
   },
   methods: {
@@ -306,7 +267,6 @@ export default {
     },
     calculateGraphColumn() {
       if (!this.$refs.graph) {
-        console.log("WHYYYYY");
         return;
       }
       this.maxGraphColumn = Math.floor(
@@ -332,14 +292,11 @@ export default {
         if (price != "-" && price != undefined) {
           this.graph.push(price);
           if (this.graph.length > this.maxGraphColumn) {
-            console.log(this.maxGraphColumn);
             this.graph = this.graph.slice(
               Math.abs(this.maxGraphColumn - this.graph.length),
               this.graph.length
             );
           }
-          console.log("Добавил" + " " + tickerName, this.graph.length);
-          console.log(this.$refs.graph);
         }
       }
     },
@@ -368,7 +325,6 @@ export default {
           allHints.push(coin);
         }
       });
-      console.log(allHints.slice(0, 4));
       return (this.hintsReady = allHints.slice(0, 4));
     },
     filteredTickersForPrice() {
@@ -388,7 +344,6 @@ export default {
             }
           })
           .slice(start, end);
-        console.log(sortArr);
         return sortArr;
       }
       if (this.filterPrice == "filterPriceUp") {
@@ -404,8 +359,6 @@ export default {
             }
           })
           .slice(start, end);
-        console.log(sortArr);
-        console.log(this.allTickers);
         return sortArr;
       } else {
         return this.allTickers.slice(start, end);
@@ -436,9 +389,6 @@ export default {
         page: this.page
       };
     },
-    // btnOn: function() {
-    //   return this.filter.trim() == "" ? true : false;
-    // },
     buildGraph: function() {
       const maxValue = Math.max(...this.graph);
       const minValue = Math.min(...this.graph);
@@ -458,18 +408,6 @@ export default {
         this.ticker = this.ticker.substr(0, this.ticker.length - 1);
       }
     },
-    filterPrice: function() {
-      console.log(this.filterPrice);
-      // this.tickersWithoutPrice = invalidTickers;
-    },
-    // filter: function() {
-    //пушим в историю браузера текущий фильтр и страницу
-    //   window.history.pushState(
-    //     null,
-    //     document.title,
-    //     `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
-    //   );
-    // },
     filteredTickers: function() {
       if (this.filteredTickers.length == 0 && this.page != 1) {
         this.page -= 1;
@@ -511,7 +449,7 @@ export default {
     let windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
     );
-    //берем из истории виндова параметры filter и page, и если они были - приписываем текущим параметрам
+    //берем из истории window параметры filter и page, и если они были - приписываем текущим параметрам
     if (windowData.filter) {
       this.filter = windowData.filter;
     }
@@ -528,7 +466,6 @@ export default {
       this.allTickers.forEach(t => {
         subscribeOnTicker(t.name, newPrice => {
           this.updatePrice(t.name, newPrice);
-          console.log(`Name: ${t.name}; Price: ${newPrice}`);
         });
       });
     }
@@ -538,7 +475,6 @@ export default {
   },
   beforeUnmount() {
     window.removeEventListener("resize", this.calculateGraphColumn);
-    // worker.terminate();
   }
 };
 </script>

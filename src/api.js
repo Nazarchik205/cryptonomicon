@@ -14,8 +14,6 @@ let allSubTickers = [];
 let currentBTCprice = 0;
 let dependingOnBTC = [];
 
-// if(navigator.onLine != true){ allSubTickers.map(x => invalidTickers.push(x) ); }
-
 socket.addEventListener("message", e => {
   let {
     TYPE: type,
@@ -26,11 +24,6 @@ socket.addEventListener("message", e => {
     MESSAGE: message
   } = JSON.parse(e.data);
 
-  //ПРИВОДИМ СПИСОК НЕ ФУНКЦИОНИРУЮЩИХ МОНЕТОК
-  // let tickerName = parameter.split(`~`)[2];
-  // invalidTickers.push(tickerName);
-  // console.log(invalidTickers);
-  // return;
   if (currency === "BTC") currentBTCprice = newPrice;
 
   if (type === INVALID_SUBS && message === "INVALID_SUB") {
@@ -113,7 +106,6 @@ export const subscribeOnTicker = (ticker, cb) => {
 };
 
 export const unsubscribeOnTicker = ticker => {
-  console.log(ticker);
   tickersHandlers.delete(ticker);
   unsubscribeOnTickerOnWS(ticker);
 };
@@ -121,7 +113,6 @@ export const unsubscribeOnTicker = ticker => {
 export const coinList = async () => {
   const f = await fetch("https://min-api.cryptocompare.com/data/all/coinlist");
   let coinListData = await f.json();
-  console.log(coinListData.Data);
   return coinListData.Data;
 };
 
