@@ -1,4 +1,9 @@
-# cryptonomicon
+# Cryptonomicon
+-Cryptonomicon is web app to monitor cryptocurrencies and their changes in real time.
+
+# Use technologies like:
+-Vue-CLI(includes ESlint and babel) on Vue2 core;
+-TailwindCSS
 
 ## Project setup
 ```
